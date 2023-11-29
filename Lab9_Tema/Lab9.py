@@ -23,7 +23,7 @@ def plot_data(processor_frequency, log_disk_size, price):
     plt.show()
 
 def main():
-    processor_frequency, log_disk_size, price = read_data()
+    price, processor_frequency, log_disk_size = read_data()
     
     # Vizualizează datele folosind funcția definită anterior
     plot_data(processor_frequency, log_disk_size, price)
@@ -42,8 +42,49 @@ def main():
         # Eșantionarea din distribuția posterioră folosind MCMC
         idata = pm.sample(2000, tune=2000, return_inferencedata=True)
 
+    # Calcularea HDI pentru beta1 și beta2
+    hdi_beta1 = az.hdi(idata.posterior['beta1'], hdi_prob=0.95)
+    hdi_beta2 = az.hdi(idata.posterior['beta2'], hdi_prob=0.95)
+
+    print(f"Estimările HDI pentru beta1: {hdi_beta1}")
+    print(f"Estimările HDI pentru beta2: {hdi_beta2}")
+
     az.plot_trace(idata, var_names=['alpha', 'beta1', 'beta2', 'sigma'])
     plt.show()
+    # Simularea prețului de vânzare așteptat (miu) pentru un computer specific
+    processor_frequency_new = 33
+    log_disk_size_new = np.log(540)
+
+    # Extrage eșantioane din distribuția posterioră a parametrilor
+    alpha_samples = idata.posterior['alpha'].values
+    beta1_samples = idata.posterior['beta1'].values
+    beta2_samples = idata.posterior['beta2'].values
+    sigma_samples = idata.posterior['sigma'].values
+       # Simularea prețului de vânzare așteptat pentru fiecare eșantion din distribuția posterioră
+    price_pred_samples = np.random.normal(
+        alpha_samples + beta1_samples * processor_frequency_new + beta2_samples * log_disk_size_new,
+        sigma_samples
+    )
+
+    # Construirea intervalului de 90% HDI pentru prețul de vânzare așteptat
+    hdi_price_pred = az.hdi(price_pred_samples, hdi_prob=0.9)
+    print(f"Intervalul de 90% HDI pentru prețul de vânzare așteptat: {hdi_price_pred}")
+
+    # Simularea prețului de vânzare așteptat (miu) pentru un computer specific
+    processor_frequency_new = 33
+    log_disk_size_new = np.log(540)
+
+    # Simularea extragerilor din distribuția predictivă posterioară
+    price_pred_posterior = pm.sample_posterior_predictive(idata, samples=5000, random_seed=1)
+
+    # Extrage extragerile simulate pentru prețul de vânzare
+    price_pred_samples = price_pred_posterior['price_pred']
+
+    # Construirea intervalului de 90% HDI pentru prețul de vânzare simulat
+    hdi_price_pred = az.hdi(price_pred_samples, hdi_prob=0.9)
+
+    print(f"Intervalul de 90% HDI pentru prețul de vânzare simulat: {hdi_price_pred}")
+
 
 if __name__ == "__main__":
     np.random.seed(1)
